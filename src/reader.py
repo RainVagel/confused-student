@@ -13,3 +13,9 @@ def student_splitter(dataframe):
     for id in dataframe.SubjectID.unique():
         ID[id] = dataframe.loc[dataframe['SubjectID'] == id]
     return ID
+
+
+def video_splitter(df, split_id):
+    return df.loc[df["VideoID"] != split_id], df.loc[df["VideoID"] == split_id]
+
+# print(video_splitter(reader("EEG_data.csv"), 3))
