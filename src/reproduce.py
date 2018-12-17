@@ -2,7 +2,9 @@ from sklearn.naive_bayes import GaussianNB
 from src.reader import *
 from sklearn.metrics import accuracy_score
 import pandas as pd
-
+from sklearn import preprocessing
+#from sklearn.ensemble import AdaBoostClassifier
+# Try to implement boosting afterwards
 
 def set_splitter(train, test, y_column):
     training_X_columns = [x for x in train.columns if x not in ["predefinedlabel", "user-definedlabeln",
@@ -55,14 +57,28 @@ def student_dependent(data):
         student_scores = []
         for split in student_set.VideoID.unique():
             training, testing = video_splitter(student_set, split)
-
+            
             # Take the mean of all the rows so that each video will have 1 row.
             # Comment them out if you want to run on the non-aggregated data
-            # training = mean_rows(training)
-            # testing = mean_rows(testing)
+            # Using mean at the moment gives better results
+            training = mean_rows(training)
+            testing = mean_rows(testing)
 
             training_X, training_Y, testing_X, testing_Y = set_splitter(training, testing, "predefinedlabel")
-            clf.fit(training_X, training_Y)
+            
+            # Scaler
+            # scaler = preprocessing.StandardScaler().fit(training_X)
+            # training_X = scaler.transform(training_X)
+            # testing_X = scaler.transform(testing_X)
+            
+            # Normalization, norm='l1' or 'l2', normalization gives better results
+            # than standardization
+            normalizer = preprocessing.Normalizer(norm='l2').fit(training_X)
+            training_X = normalizer.transform(training_X)
+            testing_X = normalizer.transform(testing_X)
+        
+            # partial_fit(...) gives better results than fit(...)
+            clf = clf.partial_fit(training_X, training_Y, [0, 1])
             predicted = clf.predict(testing_X)
             predicted = compacter(predicted)
             score = accuracy_score(testing_Y, predicted)
@@ -78,8 +94,11 @@ def student_independent(data):
 
 def main():
     df = reader("EEG_data.csv")
-    df = subtract_mean(student_remove(df, 6))
-    # df = fft_on_pandas(df, ["Attention","Mediation","Raw","Delta","Theta","Alpha1",
+    # Removing student with index 2, because of possible corrupt data
+    # Might have been fixed in newer releases, should be checked
+    # But removing gives better results
+    df = subtract_mean(student_remove(df, 2))
+    #df = fft_on_pandas(df, ["Attention","Mediation","Raw","Delta","Theta","Alpha1",
     #                         "Alpha2","Beta1","Beta2","Gamma1","Gamma2"])
     dependent_scores = student_dependent(df)
     print(dependent_scores)
