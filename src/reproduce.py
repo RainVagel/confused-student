@@ -3,6 +3,7 @@ from src.reader import *
 from sklearn.metrics import accuracy_score
 import pandas as pd
 from sklearn import preprocessing
+from feature_selector import feature_selector
 #from sklearn.ensemble import AdaBoostClassifier
 # Try to implement boosting afterwards
 
@@ -83,7 +84,6 @@ def student_dependent(data):
             predicted = compacter(predicted)
             score = accuracy_score(testing_Y, predicted)
             student_scores.append(score)
-        print(student_scores)
         scores[key] = sum(student_scores) / float(len(student_scores))
     return scores
 
@@ -97,9 +97,27 @@ def main():
     # Removing student with index 2, because of possible corrupt data
     # Might have been fixed in newer releases, should be checked
     # But removing gives better results
-    df = subtract_mean(student_remove(df, 2))
-    #df = fft_on_pandas(df, ["Attention","Mediation","Raw","Delta","Theta","Alpha1",
+    # df = subtract_mean(student_remove(df, 2))
+
+    # Try without subtracting the mean. Subtracting the mean did not increase accuracy
+    df = student_remove(df, 2)
+
+    # Performing FFT on the features decreases accuracy by nearly 10%
+    # df = fft_on_pandas(df, ["Attention","Mediation","Raw","Delta","Theta","Alpha1",
     #                         "Alpha2","Beta1","Beta2","Gamma1","Gamma2"])
+
+    # Using the feature_selector module to remove low_importance features. Mediation is removed
+    fs = feature_selector.FeatureSelector(data=df[["Attention","Mediation","Raw","Delta","Theta","Alpha1",
+                            "Alpha2","Beta1","Beta2","Gamma1","Gamma2"]], labels=df["predefinedlabel"])
+    fs.identify_collinear(correlation_threshold=0.95)
+    fs.identify_zero_importance(task='classification',
+                                eval_metric='auc',
+                                n_iterations=10,
+                                early_stopping=True)
+    fs.identify_low_importance(cumulative_importance=0.99)
+    fs.identify_missing(missing_threshold=0.6)
+    df = df.drop(columns=fs.ops["low_importance"])
+
     dependent_scores = student_dependent(df)
     print(dependent_scores)
     print(sum(dependent_scores.values()) / float(len(dependent_scores.values())))
