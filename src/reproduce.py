@@ -7,6 +7,7 @@ from feature_selector import feature_selector
 #from sklearn.ensemble import AdaBoostClassifier
 # Try to implement boosting afterwards
 
+
 def set_splitter(train, test, y_column):
     training_X_columns = [x for x in train.columns if x not in ["predefinedlabel", "user-definedlabeln",
                                                                    "SubjectID", "VideoID"]]
@@ -27,6 +28,19 @@ def mean_rows(data):
         for column in df_temp.columns:
             row[column] = df_temp[column].mean()
         new = new.append(row, ignore_index=True)
+    return new
+
+
+def mean_rows_independent(data):
+    new = pd.DataFrame(columns=data.columns)
+    for subject in data.SubjectID.unique():
+        subject_data = data.loc[data["SubjectID"] == subject]
+        for video in subject_data.VideoID.unique():
+            df_temp = subject_data.loc[subject_data["VideoID"] == video]
+            row = {}
+            for column in df_temp.columns:
+                row[column] = df_temp[column].mean()
+            new = new.append(row, ignore_index=True)
     return new
 
 
@@ -81,7 +95,6 @@ def student_dependent(data):
             # partial_fit(...) gives better results than fit(...)
             clf = clf.partial_fit(training_X, training_Y, [0, 1])
             predicted = clf.predict(testing_X)
-            predicted = compacter(predicted)
             score = accuracy_score(testing_Y, predicted)
             student_scores.append(score)
         scores[key] = sum(student_scores) / float(len(student_scores))
@@ -89,7 +102,27 @@ def student_dependent(data):
 
 
 def student_independent(data):
-    pass
+    clf = GaussianNB()
+    scores = {}
+    for key in data.SubjectID.unique():
+        training, testing = student_independent_splitter(data, key)
+
+        training = mean_rows_independent(training)
+        testing = mean_rows_independent(testing)
+
+        training_X, training_Y, testing_X, testing_Y = set_splitter(training, testing, "predefinedlabel")
+
+        # Normalization, norm='l1' or 'l2', normalization gives better results
+        # than standardization
+        normalizer = preprocessing.Normalizer(norm='l1').fit(training_X)
+        training_X = normalizer.transform(training_X)
+        testing_X = normalizer.transform(testing_X)
+
+        clf = clf.partial_fit(training_X, training_Y, [0,1])
+        predicted = clf.predict(testing_X)
+        score = accuracy_score(testing_Y, predicted)
+        scores[key] = score
+    return scores
 
 
 def main():
@@ -121,6 +154,9 @@ def main():
     dependent_scores = student_dependent(df)
     print(dependent_scores)
     print(sum(dependent_scores.values()) / float(len(dependent_scores.values())))
+    independent_scores = student_independent(df)
+    print(independent_scores)
+    print(sum(independent_scores.values()) / float(len(independent_scores.values())))
 
 
 if __name__ == '__main__':

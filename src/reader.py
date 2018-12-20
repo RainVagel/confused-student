@@ -16,6 +16,10 @@ def student_splitter(dataframe):
     return ID
 
 
+def student_independent_splitter(df, split_id):
+    return df.loc[df["SubjectID"] != split_id], df.loc[df["SubjectID"] == split_id]
+
+
 def video_splitter(df, split_id):
     return df.loc[df["VideoID"] != split_id], df.loc[df["VideoID"] == split_id]
 
