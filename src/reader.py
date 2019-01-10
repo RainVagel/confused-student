@@ -33,3 +33,22 @@ def fft_on_pandas(dataframe, columns):
         col = dataframe[column].tolist()
         dataframe[column] = np.abs(np.fft.fft(col)) ** 2
     return dataframe
+
+
+def reshape_samples(dataframe):
+    min_samples = np.inf
+    
+    # First get the maximum number of samples that each subject with each video has
+    for id in dataframe.SubjectID.unique():
+        for video in dataframe.VideoID.unique():
+            min_samples = min(min_samples,
+                              len(dataframe.loc[(dataframe["SubjectID"] == id) & (dataframe["VideoID"] == video)]))
+
+    # Create a new dataframe where each subject would have the same amount of samples for each video
+    new_df = pd.DataFrame()
+    for id in dataframe.SubjectID.unique():
+        for video in dataframe.VideoID.unique():
+            new_df = new_df.append(
+                dataframe.loc[(dataframe["SubjectID"] == id) & (dataframe["VideoID"] == video)].iloc[:112],
+                ignore_index=True)
+    return new_df
