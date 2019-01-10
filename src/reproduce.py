@@ -1,22 +1,19 @@
 from sklearn.naive_bayes import GaussianNB
-from src.reader import *
+from reader import *
 from sklearn.metrics import accuracy_score
 import pandas as pd
 from sklearn import preprocessing
-from feature_selector import feature_selector
-from src.plotter import *
+from plotter import *
 import os
 #from sklearn.ensemble import AdaBoostClassifier
 # Try to implement boosting afterwards
 
 
 def set_splitter(train, test, y_column):
-    training_X_columns = [x for x in train.columns if x not in ["predefinedlabel", "user-definedlabeln",
-                                                                   "SubjectID", "VideoID"]]
+    training_X_columns = [x for x in train.columns if x not in ["SubjectID"]]
     training_X = train[training_X_columns]
     training_Y = train[y_column]
-    testing_X_columns = [x for x in test.columns if x not in ["predefinedlabel", "user-definedlabeln",
-                                                                  "SubjectID", "VideoID"]]
+    testing_X_columns = [x for x in test.columns if x not in ["SubjectID"]]
     testing_X = test[testing_X_columns]
     testing_Y = test[y_column]
     return training_X, training_Y, testing_X, testing_Y
@@ -95,7 +92,7 @@ def student_dependent(data, target):
             testing_X = normalizer.transform(testing_X)
         
             # partial_fit(...) gives better results than fit(...)
-            clf = clf.partial_fit(training_X, training_Y, [0, 1])
+            clf = clf.partial_fit(training_X, training_Y, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
             predicted = clf.predict(testing_X)
             score = accuracy_score(testing_Y, predicted)
             student_scores.append(score)
@@ -116,11 +113,11 @@ def student_independent(data, target):
 
         # Normalization, norm='l1' or 'l2', normalization gives better results
         # than standardization
-        normalizer = preprocessing.Normalizer(norm='l1').fit(training_X)
+        normalizer = preprocessing.Normalizer(norm='l2').fit(training_X)
         training_X = normalizer.transform(training_X)
         testing_X = normalizer.transform(testing_X)
 
-        clf = clf.partial_fit(training_X, training_Y, [0,1])
+        clf = clf.partial_fit(training_X, training_Y, [0,1,2,3,4,5,6,7,8,9])
         predicted = clf.predict(testing_X)
         score = accuracy_score(testing_Y, predicted)
         scores[key] = score
