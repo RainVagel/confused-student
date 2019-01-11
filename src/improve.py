@@ -7,10 +7,54 @@ from sklearn.ensemble import AdaBoostClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.svm import SVC
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.linear_model import LogisticRegressionCV
+from src.plotter import reproduce_plotter
+import os
 
 # import CSP
 import tensorflow as tf
 from tensorflow import keras
+
+
+def student_dependent_capstone(data, target):
+    students = student_splitter(data)
+    scores = {}
+    for key in students.keys():
+        student_set = students[key]
+        student_scores = []
+        for split in student_set.VideoID.unique():
+            scaler = MinMaxScaler()
+            x = student_set.iloc[:, 2:-2]
+            scaler.fit(x)
+            x = scaler.transform(x)
+            x_mean = x.mean()
+            x_std = x.std()
+            x = (x - x_mean)/x_std
+            student_set.is_copy = False
+            student_set.iloc[:, 2:-2] = x
+
+            training, testing = video_splitter(student_set, split)
+            training_X, training_Y, testing_X, testing_Y = set_splitter(training, testing, target)
+
+            model = keras.Sequential()
+            model.add(keras.layers.Dense(300, activation="relu", input_shape=(11,)))
+            model.add(keras.layers.Dropout(0.4))
+            model.add(keras.layers.Dense(300, activation="relu"))
+            model.add(keras.layers.Dropout(0.4))
+            model.add(keras.layers.Dense(300, activation="relu"))
+            model.add(keras.layers.Dropout(0.4))
+            model.add(keras.layers.Dense(300, activation="relu"))
+            model.add(keras.layers.Dropout(0.4))
+            model.add(keras.layers.Dense(1, activation="sigmoid"))
+
+            model.compile(loss="binary_crossentropy", optimizer="adam", metrics=["accuracy"])
+            hist = model.fit(training_X, training_Y, epochs=100, batch_size=32, validation_split=0.1)
+            score = model.evaluate(testing_X, testing_Y)
+            print("Accuracy:", score[1])
+            student_scores.append(score[1])
+        scores[key] = sum(student_scores) / float(len(student_scores))
+    return scores
 
 
 def student_dependent(data, target):
@@ -18,7 +62,8 @@ def student_dependent(data, target):
     scores = {}
     # clf = AdaBoostClassifier(base_estimator=DecisionTreeClassifier(max_depth=3),
     #                          n_estimators=500)
-    clf = SVC(kernel="poly")
+    # clf = SVC(kernel="poly")
+    clf = LogisticRegressionCV(cv=3)
     for key in students.keys():
         student_set = students[key]
         student_scores = []
@@ -48,23 +93,6 @@ def student_dependent(data, target):
             # training_X = normalizer.transform(training_X)
             # testing_X = normalizer.transform(testing_X)
 
-            # NN model
-            # model = keras.Sequential()
-            # model.add(keras.layers.Dense(16, activation=tf.nn.relu, input_shape=(10,)))
-            # model.add(keras.layers.Dense(50, activation=tf.nn.relu))
-            # model.add(keras.layers.Dense(1, activation=tf.nn.sigmoid))
-            #
-            # model.compile(optimizer=tf.train.AdamOptimizer(),
-            #               loss="binary_crossentropy",
-            #               metrics=["accuracy"])
-            # history = model.fit(training_X,
-            #                     training_Y,
-            #                     epochs=50,
-            #                     verbose=1)
-            # results = model.evaluate(testing_X, testing_Y)
-            # print(results)
-            # student_scores.append(results[1])
-
             clf = clf.fit(training_X, training_Y)
             predicted = clf.predict(testing_X)
             score = accuracy_score(testing_Y, predicted)
@@ -78,6 +106,10 @@ def main():
 
     # Make all of the different samples have same amount of rows
     df = reshape_samples(df)
+    dependent_scores = student_dependent_capstone(df, "predefinedlabel")
+    print(dependent_scores)
+    dependent_scores_avg = sum(dependent_scores.values()) / float(len(dependent_scores.values()))
+    print(dependent_scores_avg)
     # fs = feature_selector.FeatureSelector(data=df[["Attention", "Mediation", "Raw", "Delta", "Theta", "Alpha1",
     #                                                "Alpha2", "Beta1", "Beta2", "Gamma1", "Gamma2"]],
     #                                       labels=df["predefinedlabel"])
@@ -89,11 +121,22 @@ def main():
     # fs.identify_low_importance(cumulative_importance=0.99)
     # fs.identify_missing(missing_threshold=0.6)
     # df_predefined = df.drop(columns=fs.ops["low_importance"])
-
-    # dependent_scores = student_dependent(df, "predefinedlabel")
+    #
+    # dependent_scores = student_dependent(df_predefined, "predefinedlabel")
     # print(dependent_scores)
     # dependent_scores_avg = sum(dependent_scores.values()) / float(len(dependent_scores.values()))
     # print(dependent_scores_avg)
+    # dependent_s = [dependent_scores_avg] + list(dependent_scores.values())
+    # dependent_final_scores = ["Original", dependent_s]
+    # trial_l = [0.48, 0.98, 0.87, 0.76, 0.65, 0.54, 0.43, 0.32, 0.21, 0.11]
+    # trial = ["Trial", trial_l]
+    # performances = [dependent_final_scores, trial]
+    # print(performances)
+    # os.chdir("..")
+    # path = os.curdir
+    # reproduce_plotter(path, performances=performances,
+    #                   labels=["Average"] + [str(int(x)+1) for x in dependent_scores.keys()],
+    #                   x_label="Students", y_label="Accuracy", title="Katsetame")
 
 
 if __name__ == '__main__':
