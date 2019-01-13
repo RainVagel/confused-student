@@ -1,12 +1,12 @@
 from sklearn.naive_bayes import GaussianNB
-# from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 from sklearn import preprocessing
-# import numpy as np
+import numpy as np
 import lightgbm as lgb
-from reader import *
-from reproduce import *
 import gc
+from reader import *
 
 
 class FeatureSelector():
@@ -233,17 +233,26 @@ def student_independent(data, target):
 
         training_X, training_Y, testing_X, testing_Y = set_splitter(training, testing, target)
 
-        # Normalization, norm='l1' or 'l2', normalization gives better results
-        # than standardization
-        normalizer = preprocessing.Normalizer(norm='l1').fit(training_X)
-        training_X = normalizer.transform(training_X)
-        testing_X = normalizer.transform(testing_X)
+        # Swapped Normalization with KBinsDiscretizer
+        KBD = preprocessing.KBinsDiscretizer(n_bins=80, encode='onehot', strategy='uniform').fit(training_X)
+        training_X = KBD.transform(training_X).toarray()
+        testing_X = KBD.transform(testing_X).toarray()
 
         clf = clf.partial_fit(training_X, training_Y, [0,1,2,3,4,5,6,7,8,9])
         predicted = clf.predict(testing_X)
         score = accuracy_score(testing_Y, predicted)
         scores[key] = score
     return scores
+
+
+def set_splitter(train, test, y_column):
+    training_X_columns = [x for x in train.columns if x not in ["SubjectID", 'VideoID']]
+    training_X = train[training_X_columns]
+    training_Y = train[y_column]
+    testing_X_columns = [x for x in test.columns if x not in ["SubjectID", "VideoID"]]
+    testing_X = test[testing_X_columns]
+    testing_Y = test[y_column]
+    return training_X, training_Y, testing_X, testing_Y
 
 
 # Tried to split each video into windows of different sizes and take average of these windows but accuracy got worse
@@ -277,6 +286,7 @@ def rework_data(data):
                 row[column] = df_temp[column].mean()
 
             new = new.append(row, ignore_index=True)
+    
     return new
 
 
@@ -284,17 +294,16 @@ def rework_data(data):
 df = reader("EEG_data.csv")
 
 
-# student id 2 data might be corrupt.
+# Removing student id 2 data gives better results.
 df = student_remove(df, 2)
 
-
+'''
 # make VideoID column the last column (for one hot encoding purposes)
 column_to_relocate = df['VideoID']
 df = df.drop(columns=['VideoID'])
 df['VideoID'] = column_to_relocate
 
 
-'''
 # renaming the columns to 4-digit integer values
 # necessary to avoid an error with one hot encoding
 # 'SubjectID' = 1000
