@@ -34,3 +34,10 @@ def reproduce_plotter(path, performances, labels, x_label, y_label, title):
     plt.legend()
     plt.savefig(path+title_maker(title))
     plt.close()
+
+
+def formatter(scores, title):
+    avg = sum(scores.values()) / float(len(scores.values()))
+    temp = [avg] + list(scores.values())
+    final = [title, temp]
+    return final

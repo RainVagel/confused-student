@@ -9,7 +9,7 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.svm import SVC
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.linear_model import LogisticRegressionCV
-from src.plotter import reproduce_plotter
+from src.plotter import reproduce_plotter, formatter
 import os
 
 # import CSP
@@ -48,9 +48,9 @@ def student_dependent_capstone(data, target):
             model.add(keras.layers.Dropout(0.4))
             model.add(keras.layers.Dense(1, activation="sigmoid"))
 
-            model.compile(loss="binary_crossentropy", optimizer="adam", metrics=["accuracy"])
+            model.compile(loss="binary_crossentropy", optimizer="rmsprop", metrics=["accuracy"])
             hist = model.fit(training_X, training_Y, epochs=100, batch_size=32, validation_split=0.1)
-            score = model.evaluate(testing_X, testing_Y)
+            score = model.evaluate(testing_X, testing_Y, batch_size=32)
             print("Accuracy:", score[1])
             student_scores.append(score[1])
         scores[key] = sum(student_scores) / float(len(student_scores))
@@ -78,10 +78,6 @@ def student_dependent(data, target):
 
             training_X, training_Y, testing_X, testing_Y = set_splitter(training, testing, target)
 
-            # Stuff for tensorflow
-            # training_Y = np.asarray(list(training_Y))
-            # testing_Y = np.asarray(list(testing_Y))
-
             # Scaler
             scaler = preprocessing.StandardScaler().fit(training_X)
             training_X = scaler.transform(training_X)
@@ -101,42 +97,91 @@ def student_dependent(data, target):
     return scores
 
 
+def student_independent(data, target):
+    scores = {}
+    scaler = MinMaxScaler()
+    x = data.iloc[:, 2:-2]
+    scaler.fit(x)
+    x = scaler.transform(x)
+    x_mean = x.mean()
+    x_std = x.std()
+    x = (x - x_mean) / x_std
+    data.is_copy = False
+    data.iloc[:, 2:-2] = x
+    for key in data.SubjectID.unique():
+        training, testing = student_independent_splitter(data, key)
+
+        training_X, training_Y, testing_X, testing_Y = set_splitter(training, testing, target)
+
+        # Normalization, norm='l1' or 'l2', normalization gives better results
+        # than standardization
+        # normalizer = preprocessing.Normalizer(norm='l1').fit(training_X)
+        # training_X = normalizer.transform(training_X)
+        # testing_X = normalizer.transform(testing_X)
+
+        model = keras.Sequential()
+        model.add(keras.layers.Dense(300, activation="relu", input_shape=(11,)))
+        model.add(keras.layers.Dropout(0.4))
+        model.add(keras.layers.Dense(300, activation="relu"))
+        model.add(keras.layers.Dropout(0.4))
+        model.add(keras.layers.Dense(300, activation="relu"))
+        model.add(keras.layers.Dropout(0.4))
+        model.add(keras.layers.Dense(300, activation="relu"))
+        model.add(keras.layers.Dropout(0.4))
+        model.add(keras.layers.Dense(1, activation="sigmoid"))
+
+        model.compile(loss="binary_crossentropy", optimizer="rmsprop", metrics=["accuracy"])
+        hist = model.fit(training_X, training_Y, epochs=100, batch_size=32, validation_split=0.1)
+        score = model.evaluate(testing_X, testing_Y, batch_size=32)
+        scores[key] = score[1]
+    return scores
+
+
+def unshuffled_nn(df, path):
+    print("Starting Student dependent predefinedlabels")
+    dependent_scores = student_dependent_capstone(df, "predefinedlabel")
+    dependent_final = formatter(dependent_scores, "Predefined")
+
+    print("Starting student dependent user-definedlabels")
+    dependent_scores_user = student_dependent_capstone(df, "user-definedlabeln")
+    dependent_user_final = formatter(dependent_scores_user, "User-defined")
+
+    dependent_performances = [dependent_final, dependent_user_final]
+
+    reproduce_plotter(path, performances=dependent_performances,
+                      labels=["Average"] + [str(int(x) + 1) for x in dependent_scores.keys()],
+                      x_label="Students", y_label="Accuracy", title="Student dependent NN")
+
+    print("Starting student independent predefinedlabels")
+    independent_scores = student_independent(df, "predefinedlabel")
+    independent_final = formatter(independent_scores, "Predefined")
+
+    print("Starting student independent user-definedlabels")
+    independent_scores_user = student_independent(df, "user-definedlabeln")
+    independent_user_final = formatter(independent_scores_user, "User-defined")
+
+    independent_performances = [independent_final, independent_user_final]
+    reproduce_plotter(path, performances=independent_performances,
+                      labels=["Average"] + [str(int(x) + 1) for x in independent_scores.keys()],
+                      x_label="Students", y_label="Accuracy", title="Student independent NN")
+
+
+def shuffled_nn(df, path):
+    # In this method we will take traditional testing measures as in just some percentage of shuffled dataset
+    pass
+
+
 def main():
     df = student_remove(reader("EEG_data.csv"), 2)
 
     # Make all of the different samples have same amount of rows
     df = reshape_samples(df)
-    dependent_scores = student_dependent_capstone(df, "predefinedlabel")
-    print(dependent_scores)
-    dependent_scores_avg = sum(dependent_scores.values()) / float(len(dependent_scores.values()))
-    print(dependent_scores_avg)
-    # fs = feature_selector.FeatureSelector(data=df[["Attention", "Mediation", "Raw", "Delta", "Theta", "Alpha1",
-    #                                                "Alpha2", "Beta1", "Beta2", "Gamma1", "Gamma2"]],
-    #                                       labels=df["predefinedlabel"])
-    # fs.identify_collinear(correlation_threshold=0.95)
-    # fs.identify_zero_importance(task='classification',
-    #                             eval_metric='auc',
-    #                             n_iterations=10,
-    #                             early_stopping=True)
-    # fs.identify_low_importance(cumulative_importance=0.99)
-    # fs.identify_missing(missing_threshold=0.6)
-    # df_predefined = df.drop(columns=fs.ops["low_importance"])
-    #
-    # dependent_scores = student_dependent(df_predefined, "predefinedlabel")
-    # print(dependent_scores)
-    # dependent_scores_avg = sum(dependent_scores.values()) / float(len(dependent_scores.values()))
-    # print(dependent_scores_avg)
-    # dependent_s = [dependent_scores_avg] + list(dependent_scores.values())
-    # dependent_final_scores = ["Original", dependent_s]
-    # trial_l = [0.48, 0.98, 0.87, 0.76, 0.65, 0.54, 0.43, 0.32, 0.21, 0.11]
-    # trial = ["Trial", trial_l]
-    # performances = [dependent_final_scores, trial]
-    # print(performances)
-    # os.chdir("..")
-    # path = os.curdir
-    # reproduce_plotter(path, performances=performances,
-    #                   labels=["Average"] + [str(int(x)+1) for x in dependent_scores.keys()],
-    #                   x_label="Students", y_label="Accuracy", title="Katsetame")
+
+    # Path for the graphs
+    os.chdir("..")
+    path = os.curdir + "/img/"
+
+    unshuffled_nn(df, path)
 
 
 if __name__ == '__main__':
