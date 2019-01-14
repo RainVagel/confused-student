@@ -237,7 +237,7 @@ def student_independent(data, target):
         training_X, training_Y, testing_X, testing_Y = set_splitter(training, testing, target)
         
         # Swapped Normalization with KBinsDiscretizer
-        KBD = preprocessing.KBinsDiscretizer(n_bins=80, encode='onehot', strategy='uniform').fit(training_X)
+        KBD = preprocessing.KBinsDiscretizer(n_bins=80000, encode='onehot', strategy='uniform').fit(training_X)
         training_X = KBD.transform(training_X).toarray()
         testing_X = KBD.transform(testing_X).toarray()
         
@@ -307,7 +307,7 @@ def with_fs(df):
     # Discovered that either predefinedlabel or user-definedlabeln can be removed 
     # without losing accuracy but not both at the same time.
     fs = FeatureSelector(data=df[['Attention','Mediation','Raw','Delta','Theta','Alpha1','Alpha2','Beta1',
-                                  'Beta2','Gamma1','Gamma2','user-definedlabeln']], # <- modify this row to choose what labels to include
+                                  'Beta2','Gamma1','Gamma2']], # <- modify this row to choose what labels to include
                            labels=df['VideoID'])
     fs.identify_collinear(correlation_threshold=0.95)
     fs.identify_zero_importance(task='classification',
@@ -325,7 +325,7 @@ def with_fs(df):
 
 
 def without_fs(df):
-    df = df.drop(columns=['predefinedlabel']) # to remove some labels
+    df = df.drop(columns=['predefinedlabel', 'user-definedlabeln']) # to remove some labels
     independent_scores = student_independent(df, "VideoID")
     independent_scores_avg = sum(independent_scores.values()) / float(len(independent_scores.values()))
     return independent_scores, independent_scores_avg
@@ -371,6 +371,7 @@ print('With feature selector:', '\n', independent_scores_with_fs, '\n', independ
 
 # predef and userdef - same accuracy 0.844; fs removes user-definedlabeln
 # only userdef - without_fs: 0.833 and with_fs: 0.844; fs removes user-definedlabeln
-# only predef - without_fs: 0.844 and with_fs: 0.833; predef is removed
+# only predef - without_fs: 0.844 and with_fs: 0.833; fs removes predef
 # neither - without_fs: 0.833 and with_fs: 0.855; fs removes mediation
+# neither with 80000 bins - without_fs: 0.878 and with_fs: 0.889
 # if you want to mess with removing predef and/or user-def labels, check out the functions with_fs and without_fs
