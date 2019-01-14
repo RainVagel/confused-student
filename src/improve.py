@@ -242,7 +242,7 @@ def student_independent_shuffled(data, target):
     data = data.drop("VideoID", 1)
 
     kf = KFold(n_splits=9)
-    counter = 1
+    counter = 0
     for train_index, test_index in kf.split(data):
         training_X, testing_X = data.iloc[train_index, :-1], data.iloc[test_index, :-1]
         training_Y, testing_Y = data.iloc[train_index, -1], data.iloc[test_index, -1]
@@ -268,19 +268,19 @@ def student_independent_shuffled(data, target):
 
 def shuffled_nn(df, path):
     # In this method we will take traditional testing measures as in just some percentage of shuffled dataset
-    print("Starting shuffled student dependent predefinedlabels")
-    dependent_scores = student_dependent_shuffled(df, "predefinedlabel")
-    dependent_final = formatter(dependent_scores, "Predefined")
-
-    print("Starting shuffled student dependent user-definedlabels")
-    dependent_scores_user = student_dependent_shuffled(df, "user-definedlabeln")
-    dependent_user_final = formatter(dependent_scores_user, "User-defined")
-
-    dependent_performances = [dependent_final, dependent_user_final]
-
-    reproduce_plotter(path, performances=dependent_performances,
-                      labels=["Average"] + [str(int(x) + 1) for x in dependent_scores.keys()],
-                      x_label="Students", y_label="Accuracy", title="Student dependent NN shuffled")
+    # print("Starting shuffled student dependent predefinedlabels")
+    # dependent_scores = student_dependent_shuffled(df, "predefinedlabel")
+    # dependent_final = formatter(dependent_scores, "Predefined")
+    #
+    # print("Starting shuffled student dependent user-definedlabels")
+    # dependent_scores_user = student_dependent_shuffled(df, "user-definedlabeln")
+    # dependent_user_final = formatter(dependent_scores_user, "User-defined")
+    #
+    # dependent_performances = [dependent_final, dependent_user_final]
+    #
+    # reproduce_plotter(path, performances=dependent_performances,
+    #                   labels=["Average"] + [str(int(x) + 1) for x in dependent_scores.keys()],
+    #                   x_label="Students", y_label="Accuracy", title="Student dependent NN shuffled")
 
     print("Starting shuffled student independent predefinedlabels")
     independent_scores = student_independent_shuffled(df, "predefinedlabel")
