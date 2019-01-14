@@ -307,7 +307,8 @@ def with_fs(df):
     # Discovered that either predefinedlabel or user-definedlabeln can be removed 
     # without losing accuracy but not both at the same time.
     fs = FeatureSelector(data=df[['Attention','Mediation','Raw','Delta','Theta','Alpha1','Alpha2','Beta1',
-                                  'Beta2','Gamma1','Gamma2','predefinedlabel','user-definedlabeln']], labels=df['VideoID'])
+                                  'Beta2','Gamma1','Gamma2','user-definedlabeln']], # <- modify this row to choose what labels to include
+                           labels=df['VideoID'])
     fs.identify_collinear(correlation_threshold=0.95)
     fs.identify_zero_importance(task='classification',
                                     eval_metric='auc',
@@ -315,7 +316,8 @@ def with_fs(df):
                                     early_stopping=True)
     fs.identify_low_importance(cumulative_importance=0.99)
     fs.identify_missing(missing_threshold=0.6)
-    df_predefined = df.drop(columns=fs.ops["low_importance"]) # user-definedlabeln is removed
+    print(fs.ops['low_importance'], 'is removed.', '\n')
+    df_predefined = df.drop(columns=fs.ops["low_importance"])
    
     independent_scores = student_independent(df_predefined, "VideoID")
     independent_scores_avg = sum(independent_scores.values()) / float(len(independent_scores.values()))
@@ -323,7 +325,7 @@ def with_fs(df):
 
 
 def without_fs(df):
-    #df = df.drop(columns=['user-definedlabeln', 'predefinedlabel']) to remove some columns
+    df = df.drop(columns=['predefinedlabel']) # to remove some labels
     independent_scores = student_independent(df, "VideoID")
     independent_scores_avg = sum(independent_scores.values()) / float(len(independent_scores.values()))
     return independent_scores, independent_scores_avg
@@ -366,8 +368,9 @@ independent_scores_with_fs, independent_scores_avg_with_fs = with_fs(df)
 
 print('Without feature selector:', '\n', independent_scores_without_fs, '\n', independent_scores_avg_without_fs, '\n')
 print('With feature selector:', '\n', independent_scores_with_fs, '\n', independent_scores_avg_with_fs)
-# predef and userdef - same 0.844
-# only userdef - without_fs: 0.833 and with_fs: 0.844
-# only predef - without_fs: 0.844 and with_fs: 0.833
-# neither - without_fs: 0.833 and with_fs: 0.855
-# if you want to mess with removing predef or user-def labels, check out the functions with_fs and without_fs
+
+# predef and userdef - same accuracy 0.844; fs removes user-definedlabeln
+# only userdef - without_fs: 0.833 and with_fs: 0.844; fs removes user-definedlabeln
+# only predef - without_fs: 0.844 and with_fs: 0.833; predef is removed
+# neither - without_fs: 0.833 and with_fs: 0.855; fs removes mediation
+# if you want to mess with removing predef and/or user-def labels, check out the functions with_fs and without_fs
