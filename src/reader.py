@@ -5,7 +5,9 @@ import numpy as np
 
 
 def reader(filename):
-    data = pd.read_csv("../data/"+filename)
+    #data = pd.read_csv("../data/"+filename)
+    # For Windows based users, use:
+    data = pd.read_csv("data/"+filename)
     return data
 
 
