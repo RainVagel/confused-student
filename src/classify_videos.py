@@ -3,10 +3,13 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn import preprocessing
+from sklearn.utils import shuffle
 import numpy as np
 import lightgbm as lgb
 import gc
+import os
 from reader import *
+from plotter import *
 
 
 class FeatureSelector():
@@ -232,12 +235,12 @@ def student_independent(data, target):
         testing = rework_data(testing)
 
         training_X, training_Y, testing_X, testing_Y = set_splitter(training, testing, target)
-
+        
         # Swapped Normalization with KBinsDiscretizer
         KBD = preprocessing.KBinsDiscretizer(n_bins=80, encode='onehot', strategy='uniform').fit(training_X)
         training_X = KBD.transform(training_X).toarray()
         testing_X = KBD.transform(testing_X).toarray()
-
+        
         clf = clf.partial_fit(training_X, training_Y, [0,1,2,3,4,5,6,7,8,9])
         predicted = clf.predict(testing_X)
         score = accuracy_score(testing_Y, predicted)
@@ -255,27 +258,38 @@ def set_splitter(train, test, y_column):
     return training_X, training_Y, testing_X, testing_Y
 
 
+def reproduce_plotter(path, performance, labels, x_label, y_label, title):
+    y_pos = range(len(labels))
+    # print(y_pos)
+    y_pos = [x + 0.25 for x in y_pos]
+    plt.bar(y_pos, performance, width=0.25, label="Accuracy")
+    plt.xticks(y_pos, labels)
+    plt.ylabel(y_label)
+    plt.xlabel(x_label)
+    plt.title(title)
+    plt.legend()
+
+    plt.savefig(path+title_maker(title))
+    plt.close()
+
+
 # Tried to split each video into windows of different sizes and take average of these windows but accuracy got worse
 # Switching to mean value of each column of each video of each student
 def rework_data(data):
     '''
     new = pd.DataFrame(columns=data.columns)
-
     for subject in data.SubjectID.unique():
         subject_data = data.loc[data["SubjectID"] == subject]
-
         for video in subject_data.VideoID.unique():
             df_temp = subject_data.loc[subject_data["VideoID"] == video]
             split_datasets = np.array_split(df_temp, 2)
-
             for df in split_datasets:
                 row = {}
-
                 for column in df.columns:
                     row[column] = df[column].mean()
-
                 new = new.append(row, ignore_index=True)
     '''
+
     new = pd.DataFrame(columns=data.columns)
     for subject in data.SubjectID.unique():
         subject_data = data.loc[data["SubjectID"] == subject]
@@ -284,10 +298,35 @@ def rework_data(data):
             row = {}
             for column in df_temp.columns:
                 row[column] = df_temp[column].mean()
-
             new = new.append(row, ignore_index=True)
-    
     return new
+
+
+def with_fs(df):
+    # Using the feature_selector module to remove low_importance features.
+    # Discovered that either predefinedlabel or user-definedlabeln can be removed 
+    # without losing accuracy but not both at the same time.
+    fs = FeatureSelector(data=df[['Attention','Mediation','Raw','Delta','Theta','Alpha1','Alpha2','Beta1',
+                                  'Beta2','Gamma1','Gamma2','predefinedlabel','user-definedlabeln']], labels=df['VideoID'])
+    fs.identify_collinear(correlation_threshold=0.95)
+    fs.identify_zero_importance(task='classification',
+                                    eval_metric='auc',
+                                    n_iterations=10,
+                                    early_stopping=True)
+    fs.identify_low_importance(cumulative_importance=0.99)
+    fs.identify_missing(missing_threshold=0.6)
+    df_predefined = df.drop(columns=fs.ops["low_importance"]) # user-definedlabeln is removed
+   
+    independent_scores = student_independent(df_predefined, "VideoID")
+    independent_scores_avg = sum(independent_scores.values()) / float(len(independent_scores.values()))
+    return independent_scores, independent_scores_avg
+
+
+def without_fs(df):
+    #df = df.drop(columns=['user-definedlabeln', 'predefinedlabel']) to remove some columns
+    independent_scores = student_independent(df, "VideoID")
+    independent_scores_avg = sum(independent_scores.values()) / float(len(independent_scores.values()))
+    return independent_scores, independent_scores_avg
 
 
 # read in the data
@@ -296,6 +335,7 @@ df = reader("EEG_data.csv")
 
 # Removing student id 2 data gives better results.
 df = student_remove(df, 2)
+
 
 '''
 # make VideoID column the last column (for one hot encoding purposes)
@@ -315,31 +355,19 @@ for col in df.columns:
         if new_col not in df.columns:
             df = df.rename({col: new_col}, axis='columns')
 
-
 # one hot encoding
 enc = OneHotEncoder(handle_unknown='ignore')
 enc.fit(df)
 df = enc.transform(df)
 '''
 
+independent_scores_without_fs, independent_scores_avg_without_fs = without_fs(df)
+independent_scores_with_fs, independent_scores_avg_with_fs = with_fs(df)
 
-
-# Using the feature_selector module to remove low_importance features.
-# Discovered that either predefinedlabel or user-definedlabeln can be removed at the 
-# same time without losing accuracy but not both.
-fs = FeatureSelector(data=df[['Attention','Mediation','Raw','Delta','Theta','Alpha1','Alpha2','Beta1',
-                              'Beta2','Gamma1','Gamma2','predefinedlabel','user-definedlabeln']], labels=df['VideoID'])
-fs.identify_collinear(correlation_threshold=0.95)
-fs.identify_zero_importance(task='classification',
-                                eval_metric='auc',
-                                n_iterations=10,
-                                early_stopping=True)
-fs.identify_low_importance(cumulative_importance=0.99)
-fs.identify_missing(missing_threshold=0.6)
-df_predefined = df.drop(columns=fs.ops["low_importance"])
-# user-definedlabeln is removed
-
-independent_scores = student_independent(df_predefined, "VideoID")
-print(independent_scores)
-independent_scores_avg = sum(independent_scores.values()) / float(len(independent_scores.values()))
-print(independent_scores_avg)
+print('Without feature selector:', '\n', independent_scores_without_fs, '\n', independent_scores_avg_without_fs, '\n')
+print('With feature selector:', '\n', independent_scores_with_fs, '\n', independent_scores_avg_with_fs)
+# predef and userdef - same 0.844
+# only userdef - without_fs: 0.833 and with_fs: 0.844
+# only predef - without_fs: 0.844 and with_fs: 0.833
+# neither - without_fs: 0.833 and with_fs: 0.855
+# if you want to mess with removing predef or user-def labels, check out the functions with_fs and without_fs

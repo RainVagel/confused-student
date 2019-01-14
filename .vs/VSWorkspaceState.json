@@ -2,6 +2,7 @@
   "ExpandedNodes": [
     "",
     "\\feature_selector",
+    "\\img",
     "\\src"
   ],
   "SelectedNode": "\\src\\classify_videos.py",
