@@ -8,8 +8,8 @@ import numpy as np
 import lightgbm as lgb
 import gc
 import os
-from reader import *
-from plotter import *
+from src.reader import *
+from src.plotter import *
 
 
 class FeatureSelector():
@@ -258,21 +258,6 @@ def set_splitter(train, test, y_column):
     return training_X, training_Y, testing_X, testing_Y
 
 
-def reproduce_plotter(path, performance, labels, x_label, y_label, title):
-    y_pos = range(len(labels))
-    # print(y_pos)
-    y_pos = [x + 0.25 for x in y_pos]
-    plt.bar(y_pos, performance, width=0.25, label="Accuracy")
-    plt.xticks(y_pos, labels)
-    plt.ylabel(y_label)
-    plt.xlabel(x_label)
-    plt.title(title)
-    plt.legend()
-
-    plt.savefig(path+title_maker(title))
-    plt.close()
-
-
 # Tried to split each video into windows of different sizes and take average of these windows but accuracy got worse
 # Switching to mean value of each column of each video of each student
 def rework_data(data):
@@ -324,11 +309,19 @@ def with_fs(df):
     return independent_scores, independent_scores_avg
 
 
-def without_fs(df):
-    df = df.drop(columns=['predefinedlabel', 'user-definedlabeln']) # to remove some labels
+def without_fs(data, remove):
+    if remove:
+        data = data.drop(columns=['predefinedlabel', 'user-definedlabeln']) # to remove some labels
     independent_scores = student_independent(df, "VideoID")
-    independent_scores_avg = sum(independent_scores.values()) / float(len(independent_scores.values()))
-    return independent_scores, independent_scores_avg
+    # independent_scores_avg = sum(independent_scores.values()) / float(len(independent_scores.values()))
+    return independent_scores
+
+
+def remove_one(data, target):
+    data = data.drop(target, 1)
+    independent_scores = student_independent(df, "VideoID")
+    # independent_scores_avg = sum(independent_scores.values()) / float(len(independent_scores.values()))
+    return independent_scores
 
 
 # read in the data
@@ -362,12 +355,42 @@ enc = OneHotEncoder(handle_unknown='ignore')
 enc.fit(df)
 df = enc.transform(df)
 '''
+print("Starting Predef")
+independent_scores_predef = remove_one(df, "user-definedlabeln")
+print("Starting User")
+independent_scores_user = remove_one(df, "predefinedlabel")
+print("Starting without either")
+independent_without_either = without_fs(df, True)
+print("Starting with both")
+independent_both = without_fs(df, False)
+print("Finished predicting")
 
-independent_scores_without_fs, independent_scores_avg_without_fs = without_fs(df)
-independent_scores_with_fs, independent_scores_avg_with_fs = with_fs(df)
+independent_scores_predef_final = formatter(independent_scores_predef, "Predefined")
+independent_scores_user_final = formatter(independent_scores_user, "User-defined")
+independent_scores_without_either_final = formatter(independent_without_either, "No confusion values")
+independent_both_final = formatter(independent_both, "Both confusion values")
 
-print('Without feature selector:', '\n', independent_scores_without_fs, '\n', independent_scores_avg_without_fs, '\n')
-print('With feature selector:', '\n', independent_scores_with_fs, '\n', independent_scores_avg_with_fs)
+performances_individual = [independent_scores_predef_final, independent_scores_user_final]
+performances_both_neither = [independent_scores_without_either_final, independent_both_final]
+
+os.chdir("..")
+path = os.curdir + "/img/"
+
+reproduce_plotter(path, performances_individual,
+                      labels=["Average"] + [str(int(x) + 1) for x in independent_scores_predef.keys()],
+                      x_label="Students", y_label="Accuracy",
+                  title="Student independent predicting video user-defined or predefined")
+
+reproduce_plotter(path, performances_both_neither,
+                      labels=["Average"] + [str(int(x) + 1) for x in independent_scores_predef.keys()],
+                      x_label="Students", y_label="Accuracy",
+                  title="Student independent predicting video confusion values")
+
+# independent_scores_without_fs, independent_scores_avg_without_fs = without_fs(df)
+# independent_scores_with_fs, independent_scores_avg_with_fs = with_fs(df)
+
+# print('Without feature selector:', '\n', independent_scores_without_fs, '\n', independent_scores_avg_without_fs, '\n')
+# print('With feature selector:', '\n', independent_scores_with_fs, '\n', independent_scores_avg_with_fs)
 
 # predef and userdef - same accuracy 0.844; fs removes user-definedlabeln
 # only userdef - without_fs: 0.833 and with_fs: 0.844; fs removes user-definedlabeln
