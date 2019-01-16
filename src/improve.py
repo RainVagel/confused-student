@@ -26,21 +26,25 @@ def student_dependent_capstone(data, target):
         student_set = students[key]
         student_scores = []
         for split in student_set.VideoID.unique():
-            scaler = MinMaxScaler()
-            x = student_set.iloc[:, 2:-2]
-            scaler.fit(x)
-            x = scaler.transform(x)
-            x_mean = x.mean()
-            x_std = x.std()
-            x = (x - x_mean)/x_std
-            student_set.is_copy = False
-            student_set.iloc[:, 2:-2] = x
+            # scaler = MinMaxScaler()
+            # x = student_set.iloc[:, 2:-2]
+            # scaler.fit(x)
+            # x = scaler.transform(x)
+            # x_mean = x.mean()
+            # x_std = x.std()
+            # x = (x - x_mean)/x_std
+            # student_set.is_copy = False
+            # student_set.iloc[:, 2:-2] = x
 
             training, testing = video_splitter(student_set, split)
             training_X, training_Y, testing_X, testing_Y = set_splitter(training, testing, target)
 
+            KBD = preprocessing.KBinsDiscretizer(n_bins=80000, encode='onehot', strategy='uniform').fit(training_X)
+            training_X = KBD.transform(training_X).toarray()
+            testing_X = KBD.transform(testing_X).toarray()
+
             model = keras.Sequential()
-            model.add(keras.layers.Dense(300, activation="relu", input_shape=(11,)))
+            model.add(keras.layers.Dense(300, activation="relu", input_shape=(training_X.shape[1],)))
             model.add(keras.layers.Dropout(0.4))
             model.add(keras.layers.Dense(300, activation="relu"))
             model.add(keras.layers.Dropout(0.4))
@@ -101,19 +105,23 @@ def student_dependent(data, target):
 
 def student_independent(data, target):
     scores = {}
-    scaler = MinMaxScaler()
-    x = data.iloc[:, 2:-2]
-    scaler.fit(x)
-    x = scaler.transform(x)
-    x_mean = x.mean()
-    x_std = x.std()
-    x = (x - x_mean) / x_std
-    data.is_copy = False
-    data.iloc[:, 2:-2] = x
+    # scaler = MinMaxScaler()
+    # x = data.iloc[:, 2:-2]
+    # scaler.fit(x)
+    # x = scaler.transform(x)
+    # x_mean = x.mean()
+    # x_std = x.std()
+    # x = (x - x_mean) / x_std
+    # data.is_copy = False
+    # data.iloc[:, 2:-2] = x
     for key in data.SubjectID.unique():
         training, testing = student_independent_splitter(data, key)
 
         training_X, training_Y, testing_X, testing_Y = set_splitter(training, testing, target)
+
+        KBD = preprocessing.KBinsDiscretizer(n_bins=80000, encode='onehot', strategy='uniform').fit(training_X)
+        training_X = KBD.transform(training_X).toarray()
+        testing_X = KBD.transform(testing_X).toarray()
 
         # Normalization, norm='l1' or 'l2', normalization gives better results
         # than standardization
@@ -122,7 +130,7 @@ def student_independent(data, target):
         # testing_X = normalizer.transform(testing_X)
 
         model = keras.Sequential()
-        model.add(keras.layers.Dense(300, activation="relu", input_shape=(11,)))
+        model.add(keras.layers.Dense(300, activation="relu", input_shape=(training_X.shape[1],)))
         model.add(keras.layers.Dropout(0.4))
         model.add(keras.layers.Dense(300, activation="relu"))
         model.add(keras.layers.Dropout(0.4))
@@ -152,7 +160,7 @@ def unshuffled_nn(df, path):
 
     reproduce_plotter(path, performances=dependent_performances,
                       labels=["Average"] + [str(int(x) + 1) for x in dependent_scores.keys()],
-                      x_label="Students", y_label="Accuracy", title="Student dependent NN")
+                      x_label="Students", y_label="Accuracy", title="Student dependent NN discrete features")
 
     print("Starting student independent predefinedlabels")
     independent_scores = student_independent(df, "predefinedlabel")
@@ -165,7 +173,7 @@ def unshuffled_nn(df, path):
     independent_performances = [independent_final, independent_user_final]
     reproduce_plotter(path, performances=independent_performances,
                       labels=["Average"] + [str(int(x) + 1) for x in independent_scores.keys()],
-                      x_label="Students", y_label="Accuracy", title="Student independent NN")
+                      x_label="Students", y_label="Accuracy", title="Student independent NN discrete features")
 
 
 def student_dependent_shuffled(data, target):
@@ -178,15 +186,15 @@ def student_dependent_shuffled(data, target):
         student_set = shuffle(student_set)
         student_set = student_set.reset_index(drop=True)
 
-        scaler = MinMaxScaler()
-        x = student_set.iloc[:, 2:-1]
-        scaler.fit(x)
-        x = scaler.transform(x)
-        x_mean = x.mean()
-        x_std = x.std()
-        x = (x - x_mean) / x_std
-        student_set.is_copy = False
-        student_set.iloc[:, 2:-1] = x
+        # scaler = MinMaxScaler()
+        # x = student_set.iloc[:, 2:-1]
+        # scaler.fit(x)
+        # x = scaler.transform(x)
+        # x_mean = x.mean()
+        # x_std = x.std()
+        # x = (x - x_mean) / x_std
+        # student_set.is_copy = False
+        # student_set.iloc[:, 2:-1] = x
 
         student_set = student_set.drop("SubjectID", 1)
         student_set = student_set.drop("VideoID", 1)
@@ -196,8 +204,12 @@ def student_dependent_shuffled(data, target):
             training_X, testing_X = student_set.iloc[train_index, :-1], student_set.iloc[test_index, :-1]
             training_Y, testing_Y = student_set.iloc[train_index, -1], student_set.iloc[test_index, -1]
 
+            KBD = preprocessing.KBinsDiscretizer(n_bins=80000, encode='onehot', strategy='uniform').fit(training_X)
+            training_X = KBD.transform(training_X).toarray()
+            testing_X = KBD.transform(testing_X).toarray()
+
             model = keras.Sequential()
-            model.add(keras.layers.Dense(300, activation="relu", input_shape=(11,)))
+            model.add(keras.layers.Dense(300, activation="relu", input_shape=(training_X.shape[1],)))
             model.add(keras.layers.Dropout(0.4))
             model.add(keras.layers.Dense(300, activation="relu"))
             model.add(keras.layers.Dropout(0.4))
@@ -225,15 +237,15 @@ def dropping_one_y(data, target):
 def student_independent_shuffled(data, target):
     data = dropping_one_y(data, target)
     scores = {}
-    scaler = MinMaxScaler()
-    x = data.iloc[:, 2:-1]
-    scaler.fit(x)
-    x = scaler.transform(x)
-    x_mean = x.mean()
-    x_std = x.std()
-    x = (x - x_mean) / x_std
-    data.is_copy = False
-    data.iloc[:, 2:-1] = x
+    # scaler = MinMaxScaler()
+    # x = data.iloc[:, 2:-1]
+    # scaler.fit(x)
+    # x = scaler.transform(x)
+    # x_mean = x.mean()
+    # x_std = x.std()
+    # x = (x - x_mean) / x_std
+    # data.is_copy = False
+    # data.iloc[:, 2:-1] = x
 
     data = shuffle(data)
     data = data.reset_index(drop=True)
@@ -247,8 +259,12 @@ def student_independent_shuffled(data, target):
         training_X, testing_X = data.iloc[train_index, :-1], data.iloc[test_index, :-1]
         training_Y, testing_Y = data.iloc[train_index, -1], data.iloc[test_index, -1]
 
+        KBD = preprocessing.KBinsDiscretizer(n_bins=80000, encode='onehot', strategy='uniform').fit(training_X)
+        training_X = KBD.transform(training_X).toarray()
+        testing_X = KBD.transform(testing_X).toarray()
+
         model = keras.Sequential()
-        model.add(keras.layers.Dense(300, activation="relu", input_shape=(11,)))
+        model.add(keras.layers.Dense(300, activation="relu", input_shape=(training_X.shape[1],)))
         model.add(keras.layers.Dropout(0.4))
         model.add(keras.layers.Dense(300, activation="relu"))
         model.add(keras.layers.Dropout(0.4))
@@ -268,19 +284,19 @@ def student_independent_shuffled(data, target):
 
 def shuffled_nn(df, path):
     # In this method we will take traditional testing measures as in just some percentage of shuffled dataset
-    # print("Starting shuffled student dependent predefinedlabels")
-    # dependent_scores = student_dependent_shuffled(df, "predefinedlabel")
-    # dependent_final = formatter(dependent_scores, "Predefined")
-    #
-    # print("Starting shuffled student dependent user-definedlabels")
-    # dependent_scores_user = student_dependent_shuffled(df, "user-definedlabeln")
-    # dependent_user_final = formatter(dependent_scores_user, "User-defined")
-    #
-    # dependent_performances = [dependent_final, dependent_user_final]
-    #
-    # reproduce_plotter(path, performances=dependent_performances,
-    #                   labels=["Average"] + [str(int(x) + 1) for x in dependent_scores.keys()],
-    #                   x_label="Students", y_label="Accuracy", title="Student dependent NN shuffled")
+    print("Starting shuffled student dependent predefinedlabels")
+    dependent_scores = student_dependent_shuffled(df, "predefinedlabel")
+    dependent_final = formatter(dependent_scores, "Predefined")
+
+    print("Starting shuffled student dependent user-definedlabels")
+    dependent_scores_user = student_dependent_shuffled(df, "user-definedlabeln")
+    dependent_user_final = formatter(dependent_scores_user, "User-defined")
+
+    dependent_performances = [dependent_final, dependent_user_final]
+
+    reproduce_plotter(path, performances=dependent_performances,
+                      labels=["Average"] + [str(int(x) + 1) for x in dependent_scores.keys()],
+                      x_label="Students", y_label="Accuracy", title="Student dependent NN shuffled discrete features")
 
     print("Starting shuffled student independent predefinedlabels")
     independent_scores = student_independent_shuffled(df, "predefinedlabel")
@@ -293,7 +309,7 @@ def shuffled_nn(df, path):
     independent_performances = [independent_final, independent_user_final]
     reproduce_plotter(path, performances=independent_performances,
                       labels=["Average"] + [str(int(x) + 1) for x in independent_scores.keys()],
-                      x_label="Round", y_label="Accuracy", title="Student independent NN shuffled")
+                      x_label="Round", y_label="Accuracy", title="Student independent NN shuffled discrete features")
 
 
 def main():
@@ -306,7 +322,7 @@ def main():
     os.chdir("..")
     path = os.curdir + "/img/"
 
-    # unshuffled_nn(df, path)
+    unshuffled_nn(df, path)
 
     shuffled_nn(df, path)
 
